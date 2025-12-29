@@ -6,6 +6,7 @@
 #include "robomaster_msgs/srv/led.hpp"
 #include "robomaster_msgs/msg/wheel_speed.hpp"
 #include "emergency_stop_msgs/srv/emergency_stop.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include "chassis.hpp"
 #include "led.hpp"
@@ -59,6 +60,12 @@ public:
                 "emergency_stop",
                 std::bind(&RoboMasterControlling::emergency_stop_service_callback, this, _1, _2)
             );
+        emergency_stop_subscription_ = create_subscription<std_msgs::msg::Bool>(
+                "/emergency_stop",
+                rclcpp::QoS(10).reliable(),
+                std::bind(&RoboMasterControlling::emergency_stop_topic_callback, this, _1)
+            );
+        RCLCPP_INFO(this->get_logger(), "Subscribed to global /emergency_stop topic");
 
         emerg_led_request_.r = 255;
         emerg_led_request_.mode = 1;
@@ -77,7 +84,9 @@ private:
     {
         if (!emergency_stopped_)
         {
-            _rm_chassis.send_speed(msg->linear.x, msg->linear.y, msg->angular.z * 180.0 / 3.1415);
+            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "send_speed");
+            // by syy, reverse to unify with ros2 twist.
+            _rm_chassis.send_speed(-msg->linear.x, -msg->linear.y, -msg->angular.z * 180.0 / 3.1415);
         }
 
         reset_watchdog();
@@ -108,9 +117,21 @@ private:
         std::shared_ptr<emergency_stop_msgs::srv::EmergencyStop::Response>      response)
     {
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Emergency stop request %d", request->stop);
-        emergency_stopped_ = request->stop;
+        handle_emergency_stop(request->stop);
+        response->success = true;
+    }
 
-        if (request->stop)
+    void emergency_stop_topic_callback(const std_msgs::msg::Bool::SharedPtr msg)
+    {
+        RCLCPP_INFO(this->get_logger(), "Emergency stop topic received: %s", msg->data ? "STOP" : "RESUME");
+        handle_emergency_stop(msg->data);
+    }
+
+    void handle_emergency_stop(bool stop)
+    {
+        emergency_stopped_ = stop;
+
+        if (stop)
         {
             _rm_chassis.send_wheel_speed(0, 0, 0, 0);
             update_leds(emerg_led_request_);
@@ -119,8 +140,6 @@ private:
         {
             update_leds(last_led_request_);
         }
-
-        response->success = true;
     }
 
     void timer_watchdog_callback(void)
@@ -156,6 +175,7 @@ private:
     rclcpp::Subscription<robomaster_msgs::msg::WheelSpeed>::SharedPtr wheel_speed_subscription_;
     rclcpp::Service<robomaster_msgs::srv::LED>::SharedPtr led_service_;
     rclcpp::Service<emergency_stop_msgs::srv::EmergencyStop>::SharedPtr emergency_stop_service_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr emergency_stop_subscription_;
     rclcpp::TimerBase::SharedPtr timer_heartbeat_;
     rclcpp::TimerBase::SharedPtr timer_watchdog_;
     robomaster_msgs::srv::LED::Request last_led_request_;
