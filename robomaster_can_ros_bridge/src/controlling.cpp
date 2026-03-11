@@ -28,7 +28,7 @@ public:
         , has_auto_msg_{false}
         , joy_was_active_{false}
         , joy_timeout_ms_{200}
-        , joy_to_auto_hold_ms_{2000}     // Hold still for 2 seconds when switching from joy to auto (unit: milliseconds)
+        , joy_to_auto_hold_ms_{500}     // Hold still for 2 seconds when switching from joy to auto (unit: milliseconds)
         , linear_zero_threshold_{0.05}   // Linear velocity threshold (m/s)
         , angular_zero_threshold_{0.1}   // Angular velocity threshold (rad/s)
         , _can_streambuf{"can0", 0x201}
